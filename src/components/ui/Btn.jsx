@@ -1,51 +1,60 @@
 const VARIANTS = {
   primary: {
-    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
+    hoverBg: 'var(--accent-hover)',
   },
   secondary: {
-    background: 'rgba(255,255,255,0.07)',
-    color: '#e2e8f0',
-    border: '1px solid rgba(255,255,255,0.12)',
+    background: 'var(--bg-surface)',
+    color: 'var(--text-secondary)',
+    border: '1px solid var(--border-subtle)',
+    hoverBg: 'var(--bg-elevated)',
+  },
+  ghost: {
+    background: 'transparent',
+    color: 'var(--text-muted)',
+    border: '1px solid var(--border-dim)',
+    hoverBg: 'var(--bg-elevated)',
   },
   danger: {
-    background: 'rgba(239,68,68,0.15)',
-    color: '#f87171',
-    border: '1px solid rgba(239,68,68,0.3)',
+    background: 'var(--danger-bg)',
+    color: 'var(--danger)',
+    border: '1px solid var(--danger)',
+    hoverBg: 'var(--danger-bg)',
   },
   success: {
-    background: 'rgba(16,185,129,0.15)',
-    color: '#34d399',
-    border: '1px solid rgba(16,185,129,0.3)',
+    background: 'var(--success-bg)',
+    color: 'var(--success)',
+    border: '1px solid var(--success)',
+    hoverBg: 'var(--success-bg)',
   },
 };
 
-export default function Btn({
-  children,
-  onClick,
-  variant = 'primary',
-  small = false,
-  disabled = false,
-  style = {},
-}) {
+export default function Btn({ children, onClick, variant = 'primary', small = false, disabled = false, style = {} }) {
+  const v = VARIANTS[variant] || VARIANTS.primary;
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       style={{
-        padding: small ? '6px 14px' : '9px 20px',
-        borderRadius: 9,
-        fontSize: small ? 13 : 14,
-        fontWeight: 500,
+        padding: small ? '6px 14px' : '9px 22px',
+        borderRadius: 'var(--radius-md)',
+        fontSize: small ? 12.5 : 13.5,
+        fontWeight: 600,
+        fontFamily: 'var(--font-body)',
         cursor: disabled ? 'not-allowed' : 'pointer',
         display: 'inline-flex',
         alignItems: 'center',
         gap: 6,
         whiteSpace: 'nowrap',
         opacity: disabled ? 0.5 : 1,
-        transition: 'opacity 0.15s',
-        ...VARIANTS[variant],
+        transition: 'background 0.15s, opacity 0.15s',
+        letterSpacing: '0.01em',
+        background: v.background,
+        color: v.color,
+        border: v.border || 'none',
+        boxShadow: variant === 'primary' ? 'var(--shadow-sm)' : 'none',
         ...style,
       }}
     >
