@@ -25,18 +25,28 @@ export function AppProvider({ children }) {
 
   // Listen to Supabase auth state
   useEffect(() => {
+    // Safety net: if everything hangs for >8s, stop loading anyway
+    const timeout = setTimeout(() => setLoading(false), 8000)
+
     // Get initial session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        try {
-          const profile = await getProfile(session.user.id)
-          setUser(profile)
-        } catch {
-          setUser(null)
+    supabase.auth.getSession()
+      .then(async ({ data: { session } }) => {
+        if (session?.user) {
+          try {
+            const profile = await getProfile(session.user.id)
+            setUser(profile)
+          } catch (err) {
+            console.error('getProfile failed:', err)
+            setUser(null)
+          }
         }
-      }
-      setLoading(false)
-    })
+        setLoading(false)
+      })
+      .catch((err) => {
+        console.error('getSession failed:', err)
+        setLoading(false)
+      })
+      .finally(() => clearTimeout(timeout))
 
     // Listen for changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
