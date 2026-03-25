@@ -1,9 +1,14 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useApp, APP_NAME, APP_TAGLINE } from '../context/AppContext'
 import { signIn, signUp } from '../lib/auth'
 
 export default function AuthScreen() {
-  const { theme, toggleTheme } = useApp()
+  const { theme, toggleTheme, user } = useApp()
+
+  // When user becomes available (auth succeeded), stop spinner
+  useEffect(() => {
+    if (user) setLoading(false)
+  }, [user])
   const [showAuth, setShowAuth] = useState(false)
   const [mode, setMode]         = useState('login')
   const [role, setRole]         = useState('student')
@@ -21,11 +26,10 @@ export default function AuthScreen() {
     setLoading(true); setError('')
     try {
       await signIn({ email: form.email, password: form.password })
-      // AppContext listener handles the rest
+      // AppContext onAuthStateChange will set user → useEffect above clears loading
     } catch (e) {
       setError(e.message || 'Invalid email or password.')
-    } finally {
-      setLoading(false)
+      setLoading(false) // only reset on error
     }
   }
 
@@ -42,11 +46,10 @@ export default function AuthScreen() {
         department: form.department,
         rollNo:     form.rollNo,
       })
-      // AppContext listener handles the rest
+      // AppContext onAuthStateChange will set user → useEffect above clears loading
     } catch (e) {
       setError(e.message || 'Something went wrong. Please try again.')
-    } finally {
-      setLoading(false)
+      setLoading(false) // only reset on error
     }
   }
 
