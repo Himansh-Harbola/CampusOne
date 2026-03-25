@@ -24,15 +24,17 @@ export function AppProvider({ children }) {
   }
 
   useEffect(() => {
-    // Get initial session
+    let initialUserId = null
+
+    // Get initial session — this is the ONLY place we load profile on boot
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
+        initialUserId = session.user.id
         try {
           const profile = await getProfile(session.user.id)
           setUser(profile)
         } catch (e) {
           console.error('Failed to load profile:', e.message)
-          // Sign out if profile can't be loaded after retries
           await supabase.auth.signOut()
           setUser(null)
           setAuthError('Could not load your profile. Please sign in again.')
@@ -45,6 +47,9 @@ export function AppProvider({ children }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (event === 'SIGNED_IN' && session?.user) {
+          // Skip if this is the same user already loaded by getSession() above
+          if (session.user.id === initialUserId) return
+          initialUserId = session.user.id
           setLoading(true)
           try {
             const profile = await getProfile(session.user.id)
@@ -53,12 +58,14 @@ export function AppProvider({ children }) {
           } catch (e) {
             console.error('Auth state change profile error:', e.message)
             setAuthError('Could not load your profile. Please try again.')
+            initialUserId = null
             await supabase.auth.signOut()
             setUser(null)
           } finally {
             setLoading(false)
           }
         } else if (event === 'SIGNED_OUT') {
+          initialUserId = null
           setUser(null)
           setActiveTab('dashboard')
           setLoading(false)

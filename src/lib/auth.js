@@ -31,9 +31,17 @@ export async function getProfile(userId) {
   // Profile exists — return immediately (fast path for existing users)
   if (data) return data
 
-  // Profile missing — only happens right after fresh signup
-  // Trigger should have created it, but wait briefly just in case
-  await new Promise(r => setTimeout(r, 800))
+  // Profile missing — only happens right after fresh signup.
+  // Retry a few times with short backoff (avoids a fixed 800ms wait for existing users).
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    await new Promise(r => setTimeout(r, 300 * attempt)) // 300ms, 600ms, 900ms
+    const { data: retry } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle()
+    if (retry) return retry
+  }
 
   const { data: data2 } = await supabase
     .from('profiles')
