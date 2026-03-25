@@ -1,6 +1,5 @@
 import { supabase } from './supabase'
 
-// ── Sign Up ──────────────────────────────────────────────────
 export async function signUp({ email, password, name, role, department, rollNo }) {
   const avatar = name
     .split(' ')
@@ -21,40 +20,41 @@ export async function signUp({ email, password, name, role, department, rollNo }
   return data
 }
 
-// ── Sign In ──────────────────────────────────────────────────
 export async function signIn({ email, password }) {
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  })
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
   if (error) throw error
   return data
 }
 
-// ── Sign Out ─────────────────────────────────────────────────
 export async function signOut() {
   const { error } = await supabase.auth.signOut()
   if (error) throw error
 }
 
-// ── Get current session ──────────────────────────────────────
-export async function getSession() {
-  const { data: { session } } = await supabase.auth.getSession()
-  return session
-}
-
-// ── Get profile from DB ──────────────────────────────────────
 export async function getProfile(userId) {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .single()
-  if (error) throw error
-  return data
+  // Retry up to 5 times with delay — profile may not exist yet right after signup
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle()
+
+    if (data) return data
+
+    if (error) {
+      console.warn(`getProfile attempt ${attempt + 1} error:`, error.message)
+    } else {
+      console.warn(`getProfile attempt ${attempt + 1}: profile not found yet`)
+    }
+
+    // Wait before retrying (500ms, 1s, 1.5s, 2s, 2.5s)
+    await new Promise(r => setTimeout(r, 500 * (attempt + 1)))
+  }
+
+  throw new Error('Profile could not be loaded. Please try signing in again.')
 }
 
-// ── Listen to auth state changes ─────────────────────────────
 export function onAuthChange(callback) {
   const { data: { subscription } } = supabase.auth.onAuthStateChange(
     (_event, session) => callback(session)

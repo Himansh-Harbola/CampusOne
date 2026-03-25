@@ -8,12 +8,12 @@ export const APP_NAME    = 'CampusOne'
 export const APP_TAGLINE = 'Every lecture, every grade, every moment — one campus.'
 
 export function AppProvider({ children }) {
-  const [user, setUser]         = useState(null)
-  const [loading, setLoading]   = useState(true)
+  const [user, setUser]           = useState(null)
+  const [loading, setLoading]     = useState(true)
+  const [authError, setAuthError] = useState('')
   const [activeTab, setActiveTab] = useState('dashboard')
-  const [theme, setTheme]       = useState(() => localStorage.getItem('co-theme') || 'light')
+  const [theme, setTheme]         = useState(() => localStorage.getItem('co-theme') || 'light')
 
-  // Apply theme
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
     localStorage.setItem('co-theme', theme)
@@ -23,44 +23,45 @@ export function AppProvider({ children }) {
     setTheme(t => t === 'light' ? 'dark' : 'light')
   }
 
-  // Listen to Supabase auth state
   useEffect(() => {
-    // Safety net: if everything hangs for >8s, stop loading anyway
-    const timeout = setTimeout(() => setLoading(false), 8000)
-
     // Get initial session
-    supabase.auth.getSession()
-      .then(async ({ data: { session } }) => {
-        if (session?.user) {
-          try {
-            const profile = await getProfile(session.user.id)
-            setUser(profile)
-          } catch (err) {
-            console.error('getProfile failed:', err)
-            setUser(null)
-          }
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        try {
+          const profile = await getProfile(session.user.id)
+          setUser(profile)
+        } catch (e) {
+          console.error('Failed to load profile:', e.message)
+          // Sign out if profile can't be loaded after retries
+          await supabase.auth.signOut()
+          setUser(null)
+          setAuthError('Could not load your profile. Please sign in again.')
         }
-        setLoading(false)
-      })
-      .catch((err) => {
-        console.error('getSession failed:', err)
-        setLoading(false)
-      })
-      .finally(() => clearTimeout(timeout))
+      }
+      setLoading(false)
+    })
 
-    // Listen for changes
+    // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (event === 'SIGNED_IN' && session?.user) {
+          setLoading(true)
           try {
             const profile = await getProfile(session.user.id)
             setUser(profile)
-          } catch {
+            setAuthError('')
+          } catch (e) {
+            console.error('Auth state change profile error:', e.message)
+            setAuthError('Could not load your profile. Please try again.')
+            await supabase.auth.signOut()
             setUser(null)
+          } finally {
+            setLoading(false)
           }
         } else if (event === 'SIGNED_OUT') {
           setUser(null)
           setActiveTab('dashboard')
+          setLoading(false)
         }
       }
     )
@@ -74,7 +75,6 @@ export function AppProvider({ children }) {
     setActiveTab('dashboard')
   }
 
-  // Refresh profile from DB (call after updates)
   async function refreshUser() {
     if (!user?.id) return
     try {
@@ -86,6 +86,7 @@ export function AppProvider({ children }) {
   const value = {
     user, setUser,
     loading,
+    authError, setAuthError,
     activeTab, setActiveTab,
     theme, toggleTheme,
     logout, refreshUser,
