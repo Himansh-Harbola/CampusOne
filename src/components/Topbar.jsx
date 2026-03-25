@@ -13,10 +13,10 @@ const NAV_ITEMS = [
 ];
 
 export default function Topbar() {
-  const { user, activeTab, setActiveTab, logout, allUsers, theme, toggleTheme } = useApp();
+  const { user, activeTab, setActiveTab, logout, theme, toggleTheme } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
   const isDark = theme === 'dark';
-  const colorIndex = allUsers.findIndex(u => u.id === user.id);
+  const colorIndex = 0;
 
   return (
     <header style={{

@@ -10,7 +10,6 @@ export const APP_TAGLINE = 'Every lecture, every grade, every moment — one cam
 export function AppProvider({ children }) {
   const [user, setUser]           = useState(null)
   const [loading, setLoading]     = useState(true)
-  const [authError, setAuthError] = useState('')
   const [activeTab, setActiveTab] = useState('dashboard')
   const [theme, setTheme]         = useState(() => localStorage.getItem('co-theme') || 'light')
 
@@ -23,52 +22,47 @@ export function AppProvider({ children }) {
     setTheme(t => t === 'light' ? 'dark' : 'light')
   }
 
+  function userFromSession(session) {
+    const meta = session.user.user_metadata || {}
+    return {
+      id:         session.user.id,
+      email:      session.user.email,
+      name:       meta.name       || session.user.email,
+      role:       meta.role       || 'student',
+      department: meta.department || '',
+      roll_no:    meta.roll_no    || '',
+      avatar:     meta.avatar     || (session.user.email?.[0] || '?').toUpperCase(),
+    }
+  }
+
+  async function loadUser(sessionUser) {
+    try {
+      const profile = await getProfile(sessionUser.id)
+      setUser(profile)
+    } catch {
+      setUser(userFromSession({ user: sessionUser }))
+    }
+  }
+
   useEffect(() => {
-    let initialUserId = null
-
-    // Get initial session — this is the ONLY place we load profile on boot
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    // Step 1: getSession() for the initial load — this is required in supabase-js v2
+    // to get the persisted session from localStorage immediately.
+    supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
-        initialUserId = session.user.id
-        try {
-          const profile = await getProfile(session.user.id)
-          setUser(profile)
-        } catch (e) {
-          console.error('Failed to load profile:', e.message)
-          await supabase.auth.signOut()
-          setUser(null)
-          setAuthError('Could not load your profile. Please sign in again.')
-        }
+        loadUser(session.user).finally(() => setLoading(false))
+      } else {
+        setLoading(false)
       }
-      setLoading(false)
-    })
+    }).catch(() => setLoading(false))
 
-    // Listen for auth state changes
+    // Step 2: onAuthStateChange for login/logout events AFTER initial load
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         if (event === 'SIGNED_IN' && session?.user) {
-          // Skip if this is the same user already loaded by getSession() above
-          if (session.user.id === initialUserId) return
-          initialUserId = session.user.id
-          setLoading(true)
-          try {
-            const profile = await getProfile(session.user.id)
-            setUser(profile)
-            setAuthError('')
-          } catch (e) {
-            console.error('Auth state change profile error:', e.message)
-            setAuthError('Could not load your profile. Please try again.')
-            initialUserId = null
-            await supabase.auth.signOut()
-            setUser(null)
-          } finally {
-            setLoading(false)
-          }
+          loadUser(session.user)
         } else if (event === 'SIGNED_OUT') {
-          initialUserId = null
           setUser(null)
           setActiveTab('dashboard')
-          setLoading(false)
         }
       }
     )
@@ -93,7 +87,6 @@ export function AppProvider({ children }) {
   const value = {
     user, setUser,
     loading,
-    authError, setAuthError,
     activeTab, setActiveTab,
     theme, toggleTheme,
     logout, refreshUser,

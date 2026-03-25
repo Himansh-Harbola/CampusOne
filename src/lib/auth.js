@@ -1,82 +1,60 @@
 import { supabase } from './supabase'
 
+// ── Sign Up ──────────────────────────────────────────────────
 export async function signUp({ email, password, name, role, department, rollNo }) {
-  const avatar = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+  const avatar = name
+    .split(' ')
+    .map(w => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
+
   const { data, error } = await supabase.auth.signUp({
-    email, password,
-    options: { data: { name, role, department, roll_no: rollNo, avatar } },
+    email,
+    password,
+    options: {
+      data: { name, role, department, roll_no: rollNo, avatar },
+    },
+  })
+
+  if (error) throw error
+  return data
+}
+
+// ── Sign In ──────────────────────────────────────────────────
+export async function signIn({ email, password }) {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
   })
   if (error) throw error
   return data
 }
 
-export async function signIn({ email, password }) {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-  if (error) throw error
-  return data
-}
-
+// ── Sign Out ─────────────────────────────────────────────────
 export async function signOut() {
   const { error } = await supabase.auth.signOut()
   if (error) throw error
 }
 
+// ── Get current session ──────────────────────────────────────
+export async function getSession() {
+  const { data: { session } } = await supabase.auth.getSession()
+  return session
+}
+
+// ── Get profile from DB ──────────────────────────────────────
 export async function getProfile(userId) {
   const { data, error } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', userId)
-    .maybeSingle()
-
-  // Profile exists — return immediately (fast path for existing users)
-  if (data) return data
-
-  // Profile missing — only happens right after fresh signup.
-  // Retry a few times with short backoff (avoids a fixed 800ms wait for existing users).
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    await new Promise(r => setTimeout(r, 300 * attempt)) // 300ms, 600ms, 900ms
-    const { data: retry } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle()
-    if (retry) return retry
-  }
-
-  const { data: data2 } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .maybeSingle()
-
-  if (data2) return data2
-
-  // Last resort — create profile manually from auth metadata
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('No authenticated user found')
-
-  const meta   = user.user_metadata || {}
-  const avatar = (meta.name || 'U').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
-
-  const { data: created, error: createError } = await supabase
-    .from('profiles')
-    .insert({
-      id:               userId,
-      name:             meta.name       || 'User',
-      role:             meta.role       || 'student',
-      department:       meta.department || '',
-      roll_no:          meta.roll_no    || '',
-      avatar:           meta.avatar     || avatar,
-      points:           0,
-      lectures_watched: 0,
-    })
-    .select()
     .single()
-
-  if (createError) throw new Error('Profile setup failed: ' + createError.message)
-  return created
+  if (error) throw error
+  return data
 }
 
+// ── Listen to auth state changes ─────────────────────────────
 export function onAuthChange(callback) {
   const { data: { subscription } } = supabase.auth.onAuthStateChange(
     (_event, session) => callback(session)

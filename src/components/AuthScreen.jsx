@@ -1,14 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useApp, APP_NAME, APP_TAGLINE } from '../context/AppContext'
 import { signIn, signUp } from '../lib/auth'
 
 export default function AuthScreen() {
-  const { theme, toggleTheme, user } = useApp()
-
-  // When user becomes available (auth succeeded), stop spinner
-  useEffect(() => {
-    if (user) setLoading(false)
-  }, [user])
+  const { theme, toggleTheme } = useApp()
   const [showAuth, setShowAuth] = useState(false)
   const [mode, setMode]         = useState('login')
   const [role, setRole]         = useState('student')
@@ -24,12 +19,16 @@ export default function AuthScreen() {
   async function handleLogin() {
     if (!form.email || !form.password) { setError('Please fill in all fields.'); return }
     setLoading(true); setError('')
+    // Safety: reset loading after 8s so button never stays stuck
+    const resetTimer = setTimeout(() => setLoading(false), 8000)
     try {
       await signIn({ email: form.email, password: form.password })
-      // AppContext onAuthStateChange will set user → useEffect above clears loading
+      // AppContext listener handles navigation — clear timer if it resolves fast
+      clearTimeout(resetTimer)
     } catch (e) {
+      clearTimeout(resetTimer)
       setError(e.message || 'Invalid email or password.')
-      setLoading(false) // only reset on error
+      setLoading(false)
     }
   }
 
@@ -37,6 +36,7 @@ export default function AuthScreen() {
     if (!form.name || !form.email || !form.password) { setError('Please fill in all required fields.'); return }
     if (form.password.length < 6) { setError('Password must be at least 6 characters.'); return }
     setLoading(true); setError('')
+    const resetTimer = setTimeout(() => setLoading(false), 8000)
     try {
       await signUp({
         email:      form.email,
@@ -46,10 +46,11 @@ export default function AuthScreen() {
         department: form.department,
         rollNo:     form.rollNo,
       })
-      // AppContext onAuthStateChange will set user → useEffect above clears loading
+      clearTimeout(resetTimer)
     } catch (e) {
+      clearTimeout(resetTimer)
       setError(e.message || 'Something went wrong. Please try again.')
-      setLoading(false) // only reset on error
+      setLoading(false)
     }
   }
 
