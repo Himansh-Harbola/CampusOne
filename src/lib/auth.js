@@ -1,21 +1,12 @@
 import { supabase } from './supabase'
 
 export async function signUp({ email, password, name, role, department, rollNo }) {
-  const avatar = name
-    .split(' ')
-    .map(w => w[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase()
+  const avatar = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
 
   const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: { name, role, department, roll_no: rollNo, avatar },
-    },
+    email, password,
+    options: { data: { name, role, department, roll_no: rollNo, avatar } },
   })
-
   if (error) throw error
   return data
 }
@@ -32,27 +23,50 @@ export async function signOut() {
 }
 
 export async function getProfile(userId) {
-  // Retry up to 5 times with delay — profile may not exist yet right after signup
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle()
+  // First try — immediate
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', userId)
+    .maybeSingle()
 
-    if (data) return data
+  if (data) return data
 
-    if (error) {
-      console.warn(`getProfile attempt ${attempt + 1} error:`, error.message)
-    } else {
-      console.warn(`getProfile attempt ${attempt + 1}: profile not found yet`)
-    }
+  // Profile not found — trigger may have missed it. Wait 1s then try once more.
+  await new Promise(r => setTimeout(r, 1000))
 
-    // Wait before retrying (500ms, 1s, 1.5s, 2s, 2.5s)
-    await new Promise(r => setTimeout(r, 500 * (attempt + 1)))
-  }
+  const { data: data2, error: error2 } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', userId)
+    .maybeSingle()
 
-  throw new Error('Profile could not be loaded. Please try signing in again.')
+  if (data2) return data2
+
+  // Still not found — manually create it from auth user metadata
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('No authenticated user found')
+
+  const meta = user.user_metadata || {}
+  const avatar = (meta.name || 'U').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+
+  const { data: created, error: createError } = await supabase
+    .from('profiles')
+    .insert({
+      id:         userId,
+      name:       meta.name       || 'User',
+      role:       meta.role       || 'student',
+      department: meta.department || '',
+      roll_no:    meta.roll_no    || '',
+      avatar:     meta.avatar     || avatar,
+      points:     0,
+      lectures_watched: 0,
+    })
+    .select()
+    .single()
+
+  if (createError) throw new Error('Profile setup failed: ' + createError.message)
+  return created
 }
 
 export function onAuthChange(callback) {
