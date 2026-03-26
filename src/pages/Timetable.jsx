@@ -11,7 +11,8 @@ const HOURS = ['8:00 AM','9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2
 const COLORS = ['#c97d2e','#2e7dc9','#2ec97d','#c92e7d','#7d2ec9','#c9a02e'];
 
 export default function Timetable() {
-  const { user, classes } = useApp();
+  const { user } = useApp();
+  const classes = [];
   const storageKey = `timetable_${user.id}`;
   const [schedule, setSchedule] = useState(() => {
     try { return JSON.parse(localStorage.getItem(storageKey)) || {}; } catch { return {}; }

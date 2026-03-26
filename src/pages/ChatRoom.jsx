@@ -84,9 +84,10 @@ export default function ChatRoom() {
     if(!message.trim() || !selectedId || sending) return
     setSending(true)
     try {
-      await sendMessage({ chatroomId: selectedId, userId: user.id, text: message.trim() })
+      const sent = await sendMessage({ chatroomId: selectedId, userId: user.id, text: message.trim() })
       setMessage('')
-      // Realtime will add the message via subscription
+      // Optimistically add message immediately — don't wait for realtime
+      if(sent) setMessages(prev => prev.some(m=>m.id===sent.id) ? prev : [...prev, sent])
     } catch(e){ alert(e.message) }
     finally { setSending(false) }
   }
