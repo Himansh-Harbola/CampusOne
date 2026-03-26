@@ -288,6 +288,75 @@ export async function sendMessage({ chatroomId, userId, text }) {
 }
 
 // ════════════════════════════════════════════════════════════
+// LIVE SESSIONS
+// ════════════════════════════════════════════════════════════
+
+export async function getLiveSessions(classIds) {
+  if (!classIds?.length) return []
+  const { data, error } = await supabase
+    .from('live_sessions')
+    .select('*, classes(name, code, teacher_id, profiles!classes_teacher_id_fkey(name, avatar))')
+    .in('class_id', classIds)
+    .eq('is_live', true)
+    .order('started_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function getAllLiveSessions() {
+  const { data, error } = await supabase
+    .from('live_sessions')
+    .select('*, classes(name, code, teacher_id, profiles!classes_teacher_id_fkey(name, avatar))')
+    .eq('is_live', true)
+    .order('started_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function startLiveSession({ classId, teacherId, title, roomName }) {
+  // End any existing live session for this class first
+  await supabase
+    .from('live_sessions')
+    .update({ is_live: false, ended_at: new Date().toISOString() })
+    .eq('class_id', classId)
+    .eq('is_live', true)
+
+  const { data, error } = await supabase
+    .from('live_sessions')
+    .insert({
+      class_id: classId,
+      teacher_id: teacherId,
+      title,
+      room_name: roomName,
+      is_live: true,
+      started_at: new Date().toISOString(),
+    })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function endLiveSession(sessionId) {
+  const { error } = await supabase
+    .from('live_sessions')
+    .update({ is_live: false, ended_at: new Date().toISOString() })
+    .eq('id', sessionId)
+  if (error) throw error
+}
+
+export async function getClassLiveSession(classId) {
+  const { data, error } = await supabase
+    .from('live_sessions')
+    .select('*')
+    .eq('class_id', classId)
+    .eq('is_live', true)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
+// ════════════════════════════════════════════════════════════
 // LEADERBOARD
 // ════════════════════════════════════════════════════════════
 
