@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { useApp } from '../context/AppContext'
 import {
   getClasses, getAllClassesForStudent, createClass,
-  enrollStudent, unenrollStudent, addLecture, getAllProfiles,
-  startLiveSession, endLiveSession, getAllLiveSessions,
+  enrollStudent, unenrollStudent, addLecture, uploadLectureVideo,
+  getAllProfiles, startLiveSession, endLiveSession, getAllLiveSessions,
 } from '../lib/db'
 import { supabase } from '../lib/supabase'
 import Page from '../components/ui/Page'
@@ -133,19 +133,40 @@ function TeacherClassDetail({ cls, onBack, students }) {
   const { user } = useApp()
   const [classData, setClassData] = useState(cls)
   const [showUpload, setShowUpload] = useState(false)
+  const [uploadTab, setUploadTab] = useState('file') // 'file' | 'youtube'
   const [lec, setLec] = useState({ title: '', duration: '', videoUrl: '' })
+  const [videoFile, setVideoFile] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState('')
 
   async function handleAddLecture() {
     if (!lec.title) return
     setSaving(true)
     try {
-      const newLec = await addLecture({ classId: cls.id, title: lec.title, duration: lec.duration, videoUrl: lec.videoUrl })
+      let videoUrl = lec.videoUrl
+      let videoType = 'youtube'
+
+      if (uploadTab === 'file') {
+        if (!videoFile) { alert('Please select a video file'); setSaving(false); return }
+        setUploadProgress('Uploading video…')
+        videoUrl = await uploadLectureVideo(videoFile, cls.id)
+        videoType = 'upload'
+        setUploadProgress('')
+      }
+
+      const newLec = await addLecture({
+        classId: cls.id,
+        title: lec.title,
+        duration: lec.duration,
+        videoUrl,
+        videoType,
+      })
       setClassData(prev => ({ ...prev, lectures: [...(prev.lectures || []), newLec] }))
       setLec({ title: '', duration: '', videoUrl: '' })
+      setVideoFile(null)
       setShowUpload(false)
     } catch (e) { alert(e.message) }
-    finally { setSaving(false) }
+    finally { setSaving(false); setUploadProgress('') }
   }
 
   async function toggleEnroll(studentId) {
@@ -210,12 +231,103 @@ function TeacherClassDetail({ cls, onBack, students }) {
         </Card>
       </div>
       {showUpload && (
-        <Modal title="Upload Lecture" onClose={() => setShowUpload(false)}>
-          <Input label="Lecture Title *" value={lec.title} onChange={e => setLec({ ...lec, title: e.target.value })} placeholder="e.g. Introduction to Arrays" />
-          <Input label="Duration" value={lec.duration} onChange={e => setLec({ ...lec, duration: e.target.value })} placeholder="e.g. 45 min" />
-          <Input label="YouTube Embed URL" value={lec.videoUrl} onChange={e => setLec({ ...lec, videoUrl: e.target.value })} placeholder="https://www.youtube.com/embed/VIDEO_ID" />
-          <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '-4px 0 16px' }}>Use format: youtube.com/embed/VIDEO_ID</p>
-          <Btn onClick={handleAddLecture} disabled={saving}>{saving ? 'Saving…' : 'Upload Lecture'}</Btn>
+        <Modal title="Upload Lecture" onClose={() => { setShowUpload(false); setVideoFile(null); setUploadTab('file') }}>
+          <Input
+            label="Lecture Title *"
+            value={lec.title}
+            onChange={e => setLec({ ...lec, title: e.target.value })}
+            placeholder="e.g. Introduction to Arrays"
+          />
+          <Input
+            label="Duration"
+            value={lec.duration}
+            onChange={e => setLec({ ...lec, duration: e.target.value })}
+            placeholder="e.g. 45 min"
+          />
+
+          {/* Tab switcher */}
+          <div style={{ display: 'flex', gap: 0, marginBottom: 14, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
+            {['file', 'youtube'].map(tab => (
+              <button
+                key={tab}
+                onClick={() => setUploadTab(tab)}
+                style={{
+                  flex: 1, padding: '8px', fontSize: 13, cursor: 'pointer',
+                  border: 'none', fontFamily: 'var(--font-body)',
+                  background: uploadTab === tab ? 'var(--accent)' : 'transparent',
+                  color: uploadTab === tab ? '#fff' : 'var(--text-muted)',
+                  fontWeight: uploadTab === tab ? 600 : 400,
+                  transition: 'all 0.15s',
+                }}
+              >
+                {tab === 'file' ? '📁 Upload File' : '▶ YouTube Link'}
+              </button>
+            ))}
+          </div>
+
+          {uploadTab === 'file' ? (
+            <div>
+              <label style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500, display: 'block', marginBottom: 8 }}>
+                Video File *
+              </label>
+              <div
+                onClick={() => document.getElementById('lecture-file-input').click()}
+                style={{
+                  border: `2px dashed ${videoFile ? 'var(--accent)' : 'var(--border-subtle)'}`,
+                  borderRadius: 10, padding: '20px', textAlign: 'center',
+                  cursor: 'pointer', marginBottom: 16,
+                  background: videoFile ? 'var(--accent-light)' : 'var(--bg-input)',
+                  transition: 'all 0.15s',
+                }}
+              >
+                {videoFile ? (
+                  <>
+                    <p style={{ fontSize: 22, margin: '0 0 6px' }}>🎬</p>
+                    <p style={{ fontSize: 13, color: 'var(--accent-text)', fontWeight: 600, margin: 0 }}>{videoFile.name}</p>
+                    <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 0' }}>
+                      {(videoFile.size / (1024 * 1024)).toFixed(1)} MB
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p style={{ fontSize: 22, margin: '0 0 6px' }}>📁</p>
+                    <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>Click to select a video file</p>
+                    <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 0' }}>MP4, MOV, WebM supported</p>
+                  </>
+                )}
+              </div>
+              <input
+                id="lecture-file-input"
+                type="file"
+                accept="video/*"
+                style={{ display: 'none' }}
+                onChange={e => {
+                  const f = e.target.files?.[0]
+                  if (f) setVideoFile(f)
+                }}
+              />
+            </div>
+          ) : (
+            <div>
+              <Input
+                label="YouTube Embed URL"
+                value={lec.videoUrl}
+                onChange={e => setLec({ ...lec, videoUrl: e.target.value })}
+                placeholder="https://www.youtube.com/embed/VIDEO_ID"
+              />
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '-8px 0 16px' }}>
+                Use format: youtube.com/embed/VIDEO_ID
+              </p>
+            </div>
+          )}
+
+          {uploadProgress && (
+            <p style={{ fontSize: 13, color: 'var(--accent)', marginBottom: 12 }}>⏳ {uploadProgress}</p>
+          )}
+
+          <Btn onClick={handleAddLecture} disabled={saving}>
+            {saving ? (uploadProgress || 'Saving…') : 'Save Lecture'}
+          </Btn>
         </Modal>
       )}
     </Page>

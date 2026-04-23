@@ -101,7 +101,20 @@ export async function unenrollStudent(classId, studentId) {
 // LECTURES
 // ════════════════════════════════════════════════════════════
 
-export async function addLecture({ classId, title, duration, videoUrl }) {
+export async function uploadLectureVideo(file, classId) {
+  const ext = file.name.split('.').pop()
+  const fileName = `${classId}/${Date.now()}.${ext}`
+  const { error } = await supabase.storage
+    .from('lecture-videos')
+    .upload(fileName, file, { cacheControl: '3600', upsert: false })
+  if (error) throw error
+  const { data: { publicUrl } } = supabase.storage
+    .from('lecture-videos')
+    .getPublicUrl(fileName)
+  return publicUrl
+}
+
+export async function addLecture({ classId, title, duration, videoUrl, videoType }) {
   const { data, error } = await supabase
     .from('lectures')
     .insert({
@@ -109,6 +122,7 @@ export async function addLecture({ classId, title, duration, videoUrl }) {
       title,
       duration: duration || '—',
       video_url: videoUrl || '',
+      video_type: videoType || 'youtube',
     })
     .select()
     .single()
