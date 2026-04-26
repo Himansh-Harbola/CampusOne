@@ -15,6 +15,7 @@ import Modal from '../components/ui/Modal'
 import Avatar from '../components/ui/Avatar'
 import LectureCard from '../components/LectureCard'
 import LiveClass from '../components/LiveClass'
+import FaceVerify from '../components/FaceVerify'
 
 const selectStyle = {
   width: '100%', padding: '10px 14px', borderRadius: 10,
@@ -96,8 +97,8 @@ function ClassGridCard({ cls, teacher, enrolled, onClick, onJoin, liveSession, o
           {/* Student: join class enrolment */}
           {onJoin && <Btn small onClick={() => onJoin(cls.id)}>Join</Btn>}
 
-          {/* Live join button (students + teacher when live) */}
-          {isLive && onJoinLive && (
+          {/* Student: join live (only shown when onGoLive is NOT present, i.e. student view) */}
+          {isLive && onJoinLive && !onGoLive && (
             <Btn
               small
               onClick={() => onJoinLive(liveSession)}
@@ -107,12 +108,12 @@ function ClassGridCard({ cls, teacher, enrolled, onClick, onJoin, liveSession, o
             </Btn>
           )}
 
-          {/* Teacher: go live */}
+          {/* Teacher: go live (only when not already live) */}
           {onGoLive && !isLive && (
             <Btn small onClick={() => onGoLive(cls)}>🎙 Go Live</Btn>
           )}
 
-          {/* Teacher: rejoin their own live */}
+          {/* Teacher: rejoin their own live session */}
           {onGoLive && isLive && onJoinLive && (
             <Btn
               small
@@ -461,7 +462,7 @@ function TeacherClasses() {
     refreshSessions()
   }
 
-  // ── Render: live room view ──
+  // ── Render: live room view (full replace — no grid underneath) ──
   if (activeSession && activeClass) {
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -614,10 +615,27 @@ function StudentClasses() {
     setLiveSessions(map)
   }
 
+  const [pendingSession, setPendingSession] = useState(null) // session waiting for face verify
+  const [pendingClass, setPendingClass]     = useState(null)
+
   function handleJoinLive(session) {
     const cls = allClasses.find(c => c.id === session.class_id)
-    setActiveSession(session)
-    setActiveClass(cls)
+    // Gate: show face verification before allowing entry
+    setPendingSession(session)
+    setPendingClass(cls)
+  }
+
+  function handleVerified() {
+    // Face passed — move into live class
+    setActiveSession(pendingSession)
+    setActiveClass(pendingClass)
+    setPendingSession(null)
+    setPendingClass(null)
+  }
+
+  function handleVerifyCancel() {
+    setPendingSession(null)
+    setPendingClass(null)
   }
 
   async function handleJoinEnroll(classId) {
@@ -627,6 +645,16 @@ function StudentClasses() {
         c.id === classId ? { ...c, enrollments: [...(c.enrollments || []), { student_id: user.id }] } : c
       ))
     } catch (e) { alert(e.message) }
+  }
+
+  // ── Render: face verification gate ──
+  if (pendingSession && pendingClass) {
+    return (
+      <FaceVerify
+        onVerified={handleVerified}
+        onClose={handleVerifyCancel}
+      />
+    )
   }
 
   // ── Render: live room ──

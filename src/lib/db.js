@@ -371,6 +371,72 @@ export async function getClassLiveSession(classId) {
 }
 
 // ════════════════════════════════════════════════════════════
+// FACE DESCRIPTORS
+// ════════════════════════════════════════════════════════════
+
+export async function saveFaceDescriptor(studentId, descriptor) {
+  // descriptor is Float32Array — store as regular array in jsonb
+  const { error } = await supabase
+    .from('face_descriptors')
+    .upsert({ student_id: studentId, descriptor: Array.from(descriptor), enrolled_at: new Date().toISOString() },
+      { onConflict: 'student_id' })
+  if (error) throw error
+}
+
+export async function getFaceDescriptor(studentId) {
+  const { data, error } = await supabase
+    .from('face_descriptors')
+    .select('descriptor')
+    .eq('student_id', studentId)
+    .maybeSingle()
+  if (error) throw error
+  return data?.descriptor || null // array of 128 numbers or null
+}
+
+// ════════════════════════════════════════════════════════════
+// LIVE ATTENDANCE
+// ════════════════════════════════════════════════════════════
+
+export async function logJoin({ sessionId, classId, studentId, studentName, rollNo }) {
+  // Upsert so re-joins don't duplicate — uses session+student as unique key
+  const { data, error } = await supabase
+    .from('live_attendance')
+    .upsert({
+      session_id:   sessionId,
+      class_id:     classId,
+      student_id:   studentId,
+      student_name: studentName,
+      roll_no:      rollNo || '—',
+      join_time:    new Date().toISOString(),
+      leave_time:   null,
+      verified:     true,
+    }, { onConflict: 'session_id,student_id' })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function logLeave(sessionId, studentId) {
+  const { error } = await supabase
+    .from('live_attendance')
+    .update({ leave_time: new Date().toISOString() })
+    .eq('session_id', sessionId)
+    .eq('student_id', studentId)
+  if (error) throw error
+}
+
+export async function getSessionAttendance(sessionId) {
+  const { data, error } = await supabase
+    .from('live_attendance')
+    .select('*')
+    .eq('session_id', sessionId)
+    .order('join_time', { ascending: true })
+  if (error) throw error
+  return data || []
+}
+
+// ════════════════════════════════════════════════════════════
 // LEADERBOARD
 // ════════════════════════════════════════════════════════════
 

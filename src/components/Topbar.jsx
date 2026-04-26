@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useApp, APP_NAME } from '../context/AppContext';
 import Avatar from './ui/Avatar';
+import FaceEnroll from './FaceEnroll';
 
 const NAV_ITEMS = [
   { id: 'dashboard',   label: 'Overview'            },
   { id: 'classes',     label: 'My Classes'           },
   { id: 'quizzes',     label: 'Tests'                },
   { id: 'leaderboard', label: 'Department Rankings'  },
-  { id: 'attendance',  label: 'Attendance'           },
   { id: 'timetable',   label: 'Timetable'            },
   { id: 'chatroom',    label: 'Discussion Forum'     },
 ];
@@ -15,6 +15,7 @@ const NAV_ITEMS = [
 export default function Topbar() {
   const { user, activeTab, setActiveTab, logout, theme, toggleTheme } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showEnroll, setShowEnroll] = useState(false);
   const isDark = theme === 'dark';
   const colorIndex = 0;
 
@@ -100,6 +101,18 @@ export default function Topbar() {
                 <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#fdf6ec' }}>{user.name}</p>
                 <p style={{ margin: '2px 0 0', fontSize: 11, color: 'rgba(253,246,236,0.4)' }}>{user.email || user.department || '—'}</p>
               </div>
+              {user.role === 'student' && (
+                <button onClick={() => { setShowEnroll(true); setMenuOpen(false); }} style={{
+                  width: '100%', padding: '10px 14px', border: 'none',
+                  borderBottom: `1px solid ${isDark ? '#1e2040' : '#3d2a1a'}`,
+                  background: 'transparent', color: 'rgba(253,246,236,0.6)',
+                  fontSize: 13, cursor: 'pointer', textAlign: 'left',
+                  fontFamily: 'var(--font-body)',
+                  display: 'flex', alignItems: 'center', gap: 8,
+                }}>
+                  📸 Enroll Face
+                </button>
+              )}
               <button onClick={() => { logout(); setMenuOpen(false); }} style={{
                 width: '100%', padding: '10px 14px', border: 'none',
                 background: 'transparent', color: 'rgba(253,246,236,0.6)',
@@ -113,6 +126,9 @@ export default function Topbar() {
           )}
         </div>
       </div>
+
+      {/* Face enroll modal */}
+      {showEnroll && <FaceEnroll onClose={() => setShowEnroll(false)} />}
     </header>
   );
 }

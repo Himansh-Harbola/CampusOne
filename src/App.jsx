@@ -5,7 +5,6 @@ import Dashboard from './pages/Dashboard'
 import Classes from './pages/Classes'
 import Quizzes from './pages/Quizzes'
 import Leaderboard from './pages/Leaderboard'
-import Attendance from './pages/Attendance'
 import Timetable from './pages/Timetable'
 import ChatRoom from './pages/ChatRoom'
 
@@ -14,7 +13,6 @@ const PAGES = {
   classes:     <Classes />,
   quizzes:     <Quizzes />,
   leaderboard: <Leaderboard />,
-  attendance:  <Attendance />,
   timetable:   <Timetable />,
   chatroom:    <ChatRoom />,
 }

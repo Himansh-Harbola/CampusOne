@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useApp } from '../context/AppContext'
-import { endLiveSession } from '../lib/db'
+import { endLiveSession, logJoin, logLeave, getSessionAttendance } from '../lib/db'
 import { startTranscription, generateNotes } from '../lib/ai'
 import { saveNotes } from '../lib/notes'
+import AttendanceDownload from './AttendanceDownload'
 
 export default function LiveClass({ session, cls, onClose, isTeacher }) {
   const { user } = useApp()
@@ -12,6 +13,7 @@ export default function LiveClass({ session, cls, onClose, isTeacher }) {
   const transcriptRef   = useRef('')
   const notesRef        = useRef(null)
   const chunkTimerRef   = useRef(null)
+  const jitsiInitedRef  = useRef(false)   // ← guard: prevent double-init
 
   const [isFullscreen, setIsFullscreen]     = useState(false)
   const [ending, setEnding]                 = useState(false)
@@ -19,6 +21,29 @@ export default function LiveClass({ session, cls, onClose, isTeacher }) {
   const [jitsiLoaded, setJitsiLoaded]       = useState(false)
   const [notesActive, setNotesActive]       = useState(false)
   const [notesStatus, setNotesStatus]       = useState('')     // small status pill
+  const [showAttendance, setShowAttendance] = useState(false)
+
+  // Log student join
+  useEffect(() => {
+    if (!isTeacher) {
+      logJoin({
+        sessionId:   session.id,
+        classId:     cls.id,
+        studentId:   user.id,
+        studentName: user.name,
+        rollNo:      user.roll_no || user.rollNo || '—',
+      }).then(() => {
+        console.log('[Attendance] Join logged for', user.name)
+      }).catch(e => {
+        console.error('[Attendance] logJoin FAILED:', e?.message || e?.code || JSON.stringify(e))
+      })
+    }
+    return () => {
+      if (!isTeacher) {
+        logLeave(session.id, user.id).catch(() => {})
+      }
+    }
+  }, [])
 
   // ── Start transcription ──────────────────────────────────
   function startTakingNotes() {
@@ -90,7 +115,23 @@ export default function LiveClass({ session, cls, onClose, isTeacher }) {
 
   // ── Jitsi ────────────────────────────────────────────────
   useEffect(() => {
-    if (window.JitsiMeetExternalAPI) { initJitsi(); return }
+    // Hard guard — if already inited (StrictMode double-invoke), do nothing
+    if (jitsiInitedRef.current) return
+    jitsiInitedRef.current = true
+
+    if (window.JitsiMeetExternalAPI) {
+      initJitsi()
+      return
+    }
+
+    // Only inject script if not already in the DOM
+    const existing = document.querySelector('script[src="https://meet.jit.si/external_api.js"]')
+    if (existing) {
+      // Script already injected but API not ready yet — wait for it
+      existing.addEventListener('load', initJitsi)
+      return
+    }
+
     const script = document.createElement('script')
     script.src = 'https://meet.jit.si/external_api.js'
     script.async = true
@@ -106,6 +147,7 @@ export default function LiveClass({ session, cls, onClose, isTeacher }) {
 
   function initJitsi() {
     if (!jitsiContainer.current) return
+    if (apiRef.current) return   // already initialized, don't create a second instance
     const api = new window.JitsiMeetExternalAPI('meet.jit.si', {
       roomName: session.room_name,
       width: '100%',
@@ -164,6 +206,9 @@ export default function LiveClass({ session, cls, onClose, isTeacher }) {
   async function handleLeave() {
     stopTakingNotes()
     await finaliseNotes()
+    if (!isTeacher) {
+      try { await logLeave(session.id, user.id) } catch (e) { console.error(e) }
+    }
     onClose()
   }
 
@@ -209,6 +254,21 @@ export default function LiveClass({ session, cls, onClose, isTeacher }) {
               {notesActive && <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#ef4444', marginRight: 5, animation: 'livePulse 1.2s ease-in-out infinite' }} />}
               {notesStatus}
             </span>
+          )}
+
+          {/* Attendance download — teacher only */}
+          {isTeacher && (
+            <button
+              onClick={() => setShowAttendance(true)}
+              title="Download Attendance"
+              style={{
+                ...iconBtnStyle,
+                width: 'auto', padding: '0 10px', fontSize: 13,
+                display: 'flex', alignItems: 'center', gap: 5,
+              }}
+            >
+              📋 Attendance
+            </button>
           )}
 
           {/* Take Notes toggle */}
@@ -272,6 +332,14 @@ export default function LiveClass({ session, cls, onClose, isTeacher }) {
           </div>
         )}
       </div>
+      {/* Attendance download modal */}
+      {showAttendance && (
+        <AttendanceDownload
+          session={session}
+          cls={cls}
+          onClose={() => setShowAttendance(false)}
+        />
+      )}
     </div>
   )
 }
